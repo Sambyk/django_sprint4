@@ -1,0 +1,401 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.8, pytest-7.1.3, pluggy-1.0.0 -- C:\Users\Sambyk\Downloads\django_sprint4-main\django_sprint4\venv\Scripts\python.exe
+django: settings: blogicum.settings (from ini)
+rootdir: C:\Users\Sambyk\Downloads\django_sprint4-main\django_sprint4, configfile: pytest.ini, testpaths: tests/
+plugins: Faker-12.0.1, django-4.5.2
+collecting ... collected 25 items
+
+tests/test_content.py::TestContent::test_unpublished PASSED              [  4%]
+tests/test_content.py::TestContent::test_only_own_pubs_in_category PASSED [  8%]
+tests/test_content.py::TestContent::test_only_own_pubs_in_profile PASSED [ 12%]
+tests/test_content.py::TestContent::test_unpublished_category PASSED     [ 16%]
+tests/test_content.py::TestContent::test_future_posts PASSED             [ 20%]
+tests/test_content.py::TestContent::test_pagination PASSED               [ 24%]
+tests/test_content.py::TestContent::test_image_visible PASSED            [ 28%]
+tests/test_err_pages.py::test_custom_err_handlers PASSED                 [ 32%]
+tests/test_users.py::test_custom_err_handlers PASSED                     [ 36%]
+tests/test_users.py::test_profile FAILED                                 [ 40%]
+tests/test_comment.py::test_comment_created_at PASSED                    [ 44%]
+tests/test_comment.py::test_comment FAILED                               [ 48%]
+tests/test_comment.py::test_404_on_comment_deleted_post PASSED           [ 52%]
+tests/test_post.py::test_post_created_at PASSED                          [ 56%]
+tests/test_post.py::test_post FAILED                                     [ 60%]
+tests/test_comment.py::TestCommentModelAttrs::test_model_attrs[`post` field] <- tests\conftest.py PASSED [ 64%]
+tests/test_comment.py::TestCommentModelAttrs::test_model_attrs[`author` field] <- tests\conftest.py PASSED [ 68%]
+tests/test_comment.py::TestCommentModelAttrs::test_model_attrs[`text` field] <- tests\conftest.py PASSED [ 72%]
+tests/test_comment.py::TestCommentModelAttrs::test_model_attrs[`created_at` field] <- tests\conftest.py PASSED [ 76%]
+tests/test_emails.py::test_gitignore PASSED                              [ 80%]
+tests/test_emails.py::test_email_backend_settings PASSED                 [ 84%]
+tests/test_err_pages.py::test_csrf_failure_view PASSED                   [ 88%]
+tests/test_post.py::TestPostModelAttrs::test_model_attrs[`image` field] <- tests\conftest.py PASSED [ 92%]
+tests/test_post.py::TestPostModelAttrs::test_model_attrs[`pub_date` field] <- tests\conftest.py PASSED [ 96%]
+tests/test_static_pages.py::test_static_pages_as_cbv PASSED              [100%]
+
+================================== FAILURES ===================================
+________________________________ test_profile _________________________________
+
+user = <User: reyesgeorge>, another_user = <User: matthewboyd>
+user_client = <django.test.client.Client object at 0x000001974D31C6A0>
+another_user_client = <django.test.client.Client object at 0x000001974D31CC10>
+unlogged_client = <django.test.client.Client object at 0x000001974D4C27A0>
+
+    @pytest.mark.django_db
+    def test_profile(
+            user, another_user, user_client, another_user_client, unlogged_client
+    ):
+        user_url = f"/profile/{user.username}/"
+        printed_url = "/profile/<username>/"
+    
+        User = get_user_model()
+        status_code_not_404_err_msg = (
+            "Убедитесь, что при обращении к странице несуществующего "
+            "пользователя возвращается статус 404."
+        )
+        try:
+            response = user_client.get("/profile/this_is_unexisting_user_name/")
+        except User.DoesNotExist:
+            raise AssertionError(status_code_not_404_err_msg)
+    
+        assert response.status_code == HTTPStatus.NOT_FOUND, (
+            status_code_not_404_err_msg)
+    
+        user_response: HttpResponse = user_client.get(user_url)
+    
+        user_content = user_response.content.decode("utf-8")
+    
+        anothers_same_page_response: HttpResponse = another_user_client.get(
+            user_url
+        )
+        anothers_same_page_content = anothers_same_page_response.content.decode(
+            "utf-8"
+        )
+    
+        unlogged_same_page_response: HttpResponse = unlogged_client.get(user_url)
+        unlogged_same_page_content = unlogged_same_page_response.content.decode(
+            "utf-8"
+        )
+    
+        for profile_user, profile_user_content in (
+                (user, user_content),
+                (user, unlogged_same_page_content),
+                (user, anothers_same_page_content),
+        ):
+            _test_user_info_displayed(
+                profile_user, profile_user_content, printed_url
+            )
+    
+        try:
+            edit_url, change_pwd_url = try_get_profile_manage_urls(
+                user_content, anothers_same_page_content, ignore_urls={user_url}
+            )
+        except ManageProfileLinksException:
+            raise AssertionError(
+                "Убедитесь, что на странице профиля пользователя ссылки для"
+                " редактирования профиля и изменения пароля видны только владельцу"
+                " профиля, но не другим пользователям."
+            )
+    
+        unlogged_diff_urls = get_extra_urls(
+            base_content=unlogged_same_page_content, extra_content=user_content
+        )
+    
+        assert {edit_url, change_pwd_url}.issubset(set(unlogged_diff_urls)), (
+            "Убедитесь, что неаутентифицированному пользователю недоступны ссылки"
+            " для редактирования профиля и изменения пароля."
+        )
+    
+        item_to_edit = user
+        item_to_edit_adapter = UserModelAdapter(item_to_edit)
+        old_prop_value = item_to_edit_adapter.displayed_field_name_or_value
+        update_props = {
+            item_to_edit_adapter.item_cls_adapter.displayed_field_name_or_value: (
+                f"{old_prop_value} edited"
+            )
+        }
+>       _test_edit(
+            KeyVal(edit_url, edit_url),
+            UserModelAdapter,
+            user,
+            EditFormTester=EditUserFormTester,
+            user_client=user_client,
+            unlogged_client=unlogged_client,
+            **update_props,
+        )
+
+tests\test_users.py:167: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_edit.py:46: in _test_edit
+    updated_form = create_updated_form(**update_props)
+tests\test_edit.py:38: in create_updated_form
+    return EditFormTester.init_create_form_from_item(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+item = <User: reyesgeorge>, Form = <class 'NoneType'>
+ModelAdapter = <class 'adapters.user.UserModelAdapter'>, file_data = None
+update_form_data = {'last_name': 'Mcdonald edited'}
+
+    @staticmethod
+    def init_create_form_from_item(
+        item: Model,
+        Form: Type[BaseForm],
+        ModelAdapter: ModelAdapterT,
+        file_data: Optional[Dict[str, SimpleUploadedFile]],
+        **update_form_data,
+    ) -> BaseForm:
+>       form = Form(instance=item)
+E       TypeError: NoneType takes no arguments
+
+tests\form\base_form_tester.py:327: TypeError
+________________________________ test_comment _________________________________
+
+user_client = <django.test.client.Client object at 0x000001974D418880>
+another_user_client = <django.test.client.Client object at 0x000001974D41B9A0>
+unlogged_client = <django.test.client.Client object at 0x000001974D418D90>
+post_with_published_location = <Post: Theory Traditional Exactly Defense Man Family>
+another_user = <User: cmills>
+post_comment_context_form_item = KeyVal(key='form', val=<CommentForm bound=False, valid=False, fields=(text)>)
+CommentModel = <class 'blog.models.Comment'>
+CommentModelAdapter = <class 'adapters.comment.CommentModelAdapter.<locals>._CommentModelAdapter'>
+profile_content_tester = <test_content.ProfilePostContentTester object at 0x000001974D4C21A0>
+
+    @pytest.mark.django_db(transaction=True)
+    def test_comment(
+            user_client: django.test.Client,
+            another_user_client: django.test.Client,
+            unlogged_client: django.test.Client,
+            post_with_published_location: Any,
+            another_user: Model,
+            post_comment_context_form_item: Tuple[str, BaseForm],
+            CommentModel: Type[Model],
+            CommentModelAdapter: CommentModelAdapterT,
+            profile_content_tester: ProfilePostContentTester
+    ):
+        post_with_published_location.author = another_user
+        post_with_published_location.save()
+        _, ctx_form = post_comment_context_form_item
+        a_post_get_response = get_a_post_get_response_safely(
+            user_client, post_with_published_location.id
+        )
+    
+        # create comments
+        creation_tester = CreateCommentFormTester(
+            a_post_get_response,
+            CommentModel,
+            user_client,
+            another_user_client,
+            unlogged_client,
+            item_adapter=None,
+            ModelAdapter=CommentModelAdapter,
+        )
+    
+        Form: Type[BaseForm] = type(ctx_form)
+        forms_to_create = create_comment_creation_forms(
+            creation_tester, Form, CommentModel, CommentModelAdapter)
+    
+        response_on_created, created_items = creation_tester.test_create_several(
+            forms_to_create[1:], qs=CommentModel.objects.all()
+        )
+        content = response_on_created.content.decode(encoding="utf8")
+        creation_tester.test_creation_response(content, created_items)
+    
+        comment_count_repr = f"({len(created_items)})"
+    
+        index_content = user_client.get("/").content.decode("utf-8")
+        if comment_count_repr not in index_content:
+>           raise AssertionError(
+                "Убедитесь, что на главной странице под постами отображается"
+                " количество комментариев. Число комментариев должно быть указано"
+                " в круглых скобках."
+            )
+E           AssertionError: Убедитесь, что на главной странице под постами отображается количество комментариев. Число комментариев должно быть указано в круглых скобках.
+
+tests\test_comment.py:145: AssertionError
+__________________________________ test_post __________________________________
+
+request = <WSGIRequest: POST '/posts/6/edit/'>
+
+    @wraps(get_response)
+    def inner(request):
+        try:
+>           response = get_response(request)
+
+venv\lib\site-packages\django\core\handlers\exception.py:47: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <django.test.client.ClientHandler object at 0x000001974E6197B0>
+request = <WSGIRequest: POST '/posts/6/edit/'>
+
+    def _get_response(self, request):
+        """
+        Resolve and call the view, then apply view, exception, and
+        template_response middleware. This method is everything that happens
+        inside the request/response middleware.
+        """
+        response = None
+        callback, callback_args, callback_kwargs = self.resolve_request(request)
+    
+        # Apply view middleware
+        for middleware_method in self._view_middleware:
+            response = middleware_method(request, callback, callback_args, callback_kwargs)
+            if response:
+                break
+    
+        if response is None:
+            wrapped_callback = self.make_view_atomic(callback)
+            # If it is an asynchronous view, run it in a subthread.
+            if asyncio.iscoroutinefunction(wrapped_callback):
+                wrapped_callback = async_to_sync(wrapped_callback)
+            try:
+>               response = wrapped_callback(request, *callback_args, **callback_kwargs)
+
+venv\lib\site-packages\django\core\handlers\base.py:181: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+request = <WSGIRequest: POST '/posts/6/edit/'>, args = ()
+kwargs = {'post_id': 6}
+self = <blog.views.PostUpdateView object at 0x000001974E8019C0>
+
+    def view(request, *args, **kwargs):
+        self = cls(**initkwargs)
+        self.setup(request, *args, **kwargs)
+        if not hasattr(self, 'request'):
+            raise AttributeError(
+                "%s instance has no 'request' attribute. Did you override "
+                "setup() and forget to call super()?" % cls.__name__
+            )
+>       return self.dispatch(request, *args, **kwargs)
+
+venv\lib\site-packages\django\views\generic\base.py:70: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <blog.views.PostUpdateView object at 0x000001974E8019C0>
+request = <WSGIRequest: POST '/posts/6/edit/'>, args = ()
+kwargs = {'post_id': 6}
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+>       return super().dispatch(request, *args, **kwargs)
+
+venv\lib\site-packages\django\contrib\auth\mixins.py:71: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <blog.views.PostUpdateView object at 0x000001974E8019C0>
+request = <WSGIRequest: POST '/posts/6/edit/'>, args = ()
+kwargs = {'post_id': 6}, user_test_result = False
+
+    def dispatch(self, request, *args, **kwargs):
+        user_test_result = self.get_test_func()()
+        if not user_test_result:
+>           return self.handle_no_permission()
+
+venv\lib\site-packages\django\contrib\auth\mixins.py:127: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <blog.views.PostUpdateView object at 0x000001974E8019C0>
+
+    def handle_no_permission(self):
+        if self.raise_exception or self.request.user.is_authenticated:
+>           raise PermissionDenied(self.get_permission_denied_message())
+E           django.core.exceptions.PermissionDenied
+
+venv\lib\site-packages\django\contrib\auth\mixins.py:46: PermissionDenied
+
+During handling of the above exception, another exception occurred:
+
+published_category = <Category: How With Agency Recognize Since Provide>
+published_location = <Location: Dr. Tyrone Mccall DVM>
+user_client = <django.test.client.Client object at 0x000001974E618BE0>
+another_user_client = <django.test.client.Client object at 0x000001974E618F10>
+unlogged_client = <django.test.client.Client object at 0x000001974D446CB0>
+comment_to_a_post = <Comment: Comment by stephenschwartz on Measure Toward War Try Far Upon>
+create_post_context_form_item = KeyVal(key='form', val=<PostForm bound=False, valid=False, fields=(is_published;title;text;pub_date;location;category;image)>)
+PostModel = <class 'blog.models.Post'>
+CommentModelAdapter = <class 'adapters.comment.CommentModelAdapter.<locals>._CommentModelAdapter'>
+main_content_tester = <test_content.MainPostContentTester object at 0x000001974D446E90>
+
+    @pytest.mark.django_db(transaction=True)
+    def test_post(
+            published_category: Model,
+            published_location: Model,
+            user_client: django.test.Client,
+            another_user_client: django.test.Client,
+            unlogged_client: django.test.Client,
+            comment_to_a_post: Model,
+            create_post_context_form_item: Tuple[str, BaseForm],
+            PostModel: Type[Model],
+            CommentModelAdapter: CommentModelAdapterT,
+            main_content_tester: MainPostContentTester
+    ):
+        _, ctx_form = create_post_context_form_item
+    
+        create_a_post_get_response = get_create_a_post_get_response_safely(
+            user_client
+        )
+    
+        response_on_created, created_items = _test_create_items(
+            PostModel,
+            PostModelAdapter,
+            another_user_client,
+            create_a_post_get_response,
+            ctx_form,
+            published_category,
+            published_location,
+            unlogged_client,
+            user_client,
+        )
+    
+        # checking images are visible on post creation
+        created_content = response_on_created.content.decode('utf-8')
+        img_count = created_content.count('<img')
+        expected_img_count = main_content_tester.n_or_page_size(len(created_items))
+        assert img_count >= expected_img_count, (
+            'Убедитесь, что при создании публикации она отображается с картинкой.'
+        )
+    
+>       edit_response, edit_url, del_url = _test_edit_post(
+            CommentModelAdapter,
+            another_user_client,
+            comment_to_a_post,
+            unlogged_client=unlogged_client,
+            user_client=user_client,
+        )
+
+tests\test_post.py:111: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_post.py:360: in _test_edit_post
+    edit_response = _test_edit(
+tests\test_edit.py:58: in _test_edit
+    return tester.test_edit_item(
+tests\form\post\edit_form_tester.py:126: in test_edit_item
+    return super().test_edit_item(updated_form, qs, item_adapter)
+tests\form\base_form_tester.py:370: in test_edit_item
+    can_edit, _ = self.user_can_edit(
+tests\form\base_form_tester.py:427: in user_can_edit
+    response = submitter.test_submit(
+tests\form\base_form_tester.py:448: in test_submit
+    response = self.client.post(url, data=data, follow=True)
+venv\lib\site-packages\django\test\client.py:751: in post
+    response = super().post(path, data=data, content_type=content_type, secure=secure, **extra)
+venv\lib\site-packages\django\test\client.py:407: in post
+    return self.generic('POST', path, post_data, content_type,
+venv\lib\site-packages\django\test\client.py:473: in generic
+    return self.request(**r)
+venv\lib\site-packages\django\test\client.py:719: in request
+    self.check_exception(response)
+venv\lib\site-packages\django\test\client.py:580: in check_exception
+    raise exc_value
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+request = <WSGIRequest: POST '/posts/6/edit/'>
+resolver = <URLResolver 'blogicum.urls' (None:None) '^/'>, status_code = 403
+exception = PermissionDenied('')
+
+    def get_exception_response(request, resolver, status_code, exception):
+        try:
+            callback = resolver.resolve_error_handler(status_code)
+>           response = callback(request, exception=exception)
+E           TypeError: csrf_failure() got an unexpected keyword argument 'exception'
+
+venv\lib\site-packages\django\core\handlers\exception.py:132: TypeError
+======================== 3 failed, 22 passed in 6.02s =========================
